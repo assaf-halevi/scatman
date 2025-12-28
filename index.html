@@ -1,808 +1,268 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="he">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <title>Audio Test</title>
-  <style>
-    html, body { height: 100%; margin: 0; background: #fff; }
-    body { display: grid; place-items: center; font-family: system-ui, Arial; }
-    button { font-size: 24px; padding: 18px 26px; }
-    #log { margin-top: 16px; font-size: 14px; white-space: pre-wrap; max-width: 90vw; }
-  </style>
-</head>
-<body>
-  <div>
-    <button id="btn">נגן INTRO.mp3</button>
-    <div id="log"></div>
-  </div>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no" />
+<title>Tap & Jump</title>
 
-  <script>
-    const btn = document.getElementById('btn');
-    const log = document.getElementById('log');
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ffffff">
 
-    function println(s) {
-      log.textContent += s + "\n";
-    }
-
-    btn.addEventListener('click', async () => {
-      log.textContent = "";
-      println("Clicked.");
-
-      // Create a fresh audio element
-      const a = new Audio("INTRO.mp3");
-      a.preload = "auto";
-
-      // Helpful event logs
-      a.addEventListener("error", () => {
-        const code = a.error?.code;
-        println("Audio error. code=" + code + " (1=ABORTED,2=NETWORK,3=DECODE,4=SRC_NOT_SUPPORTED)");
-      });
-
-      a.addEventListener("loadedmetadata", () => println("loadedmetadata"));
-      a.addEventListener("canplay", () => println("canplay"));
-      a.addEventListener("playing", () => println("playing"));
-      a.addEventListener("ended", () => println("ended"));
-
-      try {
-        await a.play();
-        println("play() resolved ✅");
-      } catch (err) {
-        println("play() rejected ❌");
-        println(String(err));
-      }
-    });
-  </script>
-</body>
-</html>    cursor: pointer;
-}
-#splash img {
-    max-width: 92vw;
-    max-height: 92vh;
-    user-select: none;
-    -webkit-user-drag: none;
-}
-#loadingStatus {
-    position: absolute;
-    bottom: 20%;
-    color: #333;
-    font-size: 16px;
-    display: none;
-}
-#progressBar {
-    width: 200px;
-    height: 4px;
-    background: #eee;
-    border-radius: 2px;
-    margin-top: 10px;
-    overflow: hidden;
-}
-#progressFill {
-    width: 0%;
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    width: 100%;
     height: 100%;
-    background: #4CAF50;
-    transition: width 0.3s;
-}
-/* Target */
-#target {
-    position: absolute;
-    width: 120px;
-    height: 120px;
-    display: none;
-    user-select: none;
-    -webkit-user-drag: none;
-    cursor: pointer;
-    transition: transform 0.1s;
-}
-#target:active {
-    transform: scale(0.95);
-}
-/* Error message */
-#errorMsg {
+    overflow: hidden;
+    touch-action: none;
+    font-family: system-ui, Arial, sans-serif;
+  }
+
+  /* Fullscreen app area */
+  #app {
     position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: #f44336;
-    color: white;
-    padding: 20px;
-    border-radius: 8px;
-    display: none;
-    z-index: 100;
-    max-width: 80%;
-    text-align: center;
-}
-</style>
-</head>
-<body>
-<div id="game">
-    <div id="splash">
-        <img id="splashImg" src="image.png" draggable="false">
-        <div id="loadingStatus">
-            <div>טוען קבצי שמע... <span id="loadingPercent">0%</span></div>
-            <div id="progressBar">
-                <div id="progressFill"></div>
-            </div>
-        </div>
-    </div>
-    <img id="target" src="image.png" draggable="false">
-    <div id="errorMsg"></div>
-</div>
+    inset: 0;
+    background: #ffffff;
+  }
 
-<script>
-/* ================= CONFIG ================= */
-const TOTAL_SOUNDS = 48;
-let currentSound = 1;
-const DEBUG = true; // Set to false in production
-
-/* ================= ELEMENTS ================= */
-const splash = document.getElementById("splash");
-const splashImg = document.getElementById("splashImg");
-const target = document.getElementById("target");
-const loadingStatus = document.getElementById("loadingStatus");
-const loadingPercent = document.getElementById("loadingPercent");
-const progressFill = document.getElementById("progressFill");
-const errorMsg = document.getElementById("errorMsg");
-
-/* ================= AUDIO ================= */
-let audioCtx = null;
-let audioBuffers = {};
-let audioUnlocked = false;
-let isLoading = false;
-
-function log(...args) {
-    if (DEBUG) console.log('[TapJump]', ...args);
-}
-
-function showError(msg) {
-    errorMsg.textContent = msg;
-    errorMsg.style.display = 'block';
-    setTimeout(() => {
-        errorMsg.style.display = 'none';
-    }, 5000);
-}
-
-/* Load audio file into buffer with retry logic */
-async function loadSound(name, url, retries = 3) {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-        try {
-            log(`Loading ${url} (attempt ${attempt})`);
-            const res = await fetch(url);
-            
-            if (!res.ok) {
-                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-            }
-            
-            const data = await res.arrayBuffer();
-            audioBuffers[name] = await audioCtx.decodeAudioData(data);
-            log(`✓ Loaded: ${url}`);
-            return true;
-            
-        } catch (err) {
-            log(`✗ Failed to load ${url} (attempt ${attempt}):`, err.message);
-            
-            if (attempt === retries) {
-                // Create silent buffer as fallback
-                log(`Creating silent buffer for ${name}`);
-                audioBuffers[name] = audioCtx.createBuffer(
-                    1, 
-                    audioCtx.sampleRate * 0.1, 
-                    audioCtx.sampleRate
-                );
-                return false;
-            }
-            
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
-    }
-}
-
-/* Play buffer safely */
-function playBuffer(name) {
-    try {
-        if (!audioCtx) {
-            log('AudioContext not initialized');
-            return;
-        }
-        
-        if (!audioBuffers[name]) {
-            log(`Buffer ${name} not found`);
-            return;
-        }
-        
-        const src = audioCtx.createBufferSource();
-        src.buffer = audioBuffers[name];
-        src.connect(audioCtx.destination);
-        src.start(0);
-        log(`Playing: ${name}`);
-        
-    } catch (err) {
-        log(`Error playing ${name}:`, err);
-    }
-}
-
-/* ================= HELPERS ================= */
-function randomPosition() {
-    const w = target.offsetWidth || 120;
-    const h = target.offsetHeight || 120;
-    const maxX = Math.max(0, window.innerWidth - w);
-    const maxY = Math.max(0, window.innerHeight - h);
-    target.style.left = Math.floor(Math.random() * maxX) + "px";
-    target.style.top = Math.floor(Math.random() * maxY) + "px";
-}
-
-function updateProgress(loaded, total) {
-    const percent = Math.round((loaded / total) * 100);
-    loadingPercent.textContent = `${percent}%`;
-    progressFill.style.width = `${percent}%`;
-}
-
-/* ================= START GAME ================= */
-async function startGame() {
-    if (audioUnlocked || isLoading) {
-        log('Game already started or loading');
-        return;
-    }
-    
-    isLoading = true;
-    log('=== Starting game ===');
-
-    try {
-        // Create audio context
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        log('AudioContext created, state:', audioCtx.state);
-
-        // CRITICAL: Resume context (required for iOS/Safari)
-        if (audioCtx.state === 'suspended') {
-            log('Resuming suspended AudioContext...');
-            await audioCtx.resume();
-            log('AudioContext resumed, new state:', audioCtx.state);
-        }
-
-        // Show loading UI
-        loadingStatus.style.display = 'block';
-        splashImg.style.opacity = '0.5';
-        
-        // Load intro
-        log('Loading INTRO.mp3...');
-        updateProgress(0, TOTAL_SOUNDS + 1);
-        await loadSound("intro", "INTRO.mp3");
-        updateProgress(1, TOTAL_SOUNDS + 1);
-
-        // Load game sounds in parallel (much faster)
-        log(`Loading ${TOTAL_SOUNDS} game sounds...`);
-        const loadPromises = [];
-        
-        for (let i = 1; i <= TOTAL_SOUNDS; i++) {
-            const promise = loadSound(i, `sounds/${i}.mp3`).then(() => {
-                updateProgress(i + 1, TOTAL_SOUNDS + 1);
-            });
-            loadPromises.push(promise);
-        }
-        
-        await Promise.all(loadPromises);
-        
-        log('✓ All sounds loaded!');
-        audioUnlocked = true;
-
-        // Play intro
-        log('Playing intro...');
-        playBuffer("intro");
-
-        // Switch UI
-        loadingStatus.style.display = 'none';
-        splash.style.display = 'none';
-        target.style.display = 'block';
-        randomPosition();
-        
-        log('=== Game ready! ===');
-        
-    } catch (err) {
-        log('✗ FATAL ERROR:', err);
-        showError('שגיאה בטעינת המשחק: ' + err.message);
-        loadingStatus.style.display = 'none';
-        splashImg.style.opacity = '1';
-        isLoading = false;
-    }
-}
-
-/* ================= EVENTS ================= */
-
-// Touch events (mobile)
-splashImg.addEventListener("touchstart", async (e) => {
-    e.preventDefault();
-    log('Splash touched');
-    await startGame();
-}, { passive: false });
-
-// Click events (desktop)
-splashImg.addEventListener("click", async (e) => {
-    e.preventDefault();
-    log('Splash clicked');
-    await startGame();
-});
-
-// Target touch
-target.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    if (!audioUnlocked) {
-        log('Target touched but audio not unlocked');
-        return;
-    }
-
-    log(`Playing sound ${currentSound}`);
-    playBuffer(currentSound);
-    
-    currentSound++;
-    if (currentSound > TOTAL_SOUNDS) currentSound = 1;
-
-    randomPosition();
-}, { passive: false });
-
-// Target click (desktop)
-target.addEventListener("click", (e) => {
-    e.preventDefault();
-    if (!audioUnlocked) {
-        log('Target clicked but audio not unlocked');
-        return;
-    }
-
-    log(`Playing sound ${currentSound}`);
-    playBuffer(currentSound);
-    
-    currentSound++;
-    if (currentSound > TOTAL_SOUNDS) currentSound = 1;
-
-    randomPosition();
-});
-
-/* ================= SERVICE WORKER ================= */
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js')
-        .then(() => log('Service Worker registered'))
-        .catch(err => log('Service Worker registration failed:', err));
-}
-
-// Log initial state
-log('Page loaded. Touch/click the image to start.');
-log('User agent:', navigator.userAgent);
-</script>
-</body>
-</html>
-#splash img {
-    max-width: 92vw;
-    max-height: 92vh;
-    user-select: none;
-    -webkit-user-drag: none;
-}
-
-#target {
+  /* Splash screen (start screen) */
+  #splash {
     position: absolute;
-    width: 120px;
-    height: 120px;
-    user-select: none;
-    -webkit-user-drag: none;
-}
-</style>
-</head>
-
-<body>
-
-<!-- Splash -->
-<div id="splash">
-    <img id="splashImg" src="image.png" draggable="false">
-</div>
-
-<!-- Game -->
-<div id="game" hidden>
-    <img id="target" src="image.png" draggable="false">
-</div>
-
-<script>
-/* ================= CONFIG ================= */
-const TOTAL_SOUNDS = 48;
-let currentSound = 1;
-
-/* ================= ELEMENTS ================= */
-const splash = document.getElementById("splash");
-const splashImg = document.getElementById("splashImg");
-const game = document.getElementById("game");
-const target = document.getElementById("target");
-
-/* ================= AUDIO ================= */
-let introAudio = new Audio("INTRO.mp3");
-let soundAudio = new Audio();
-
-/* ================= HELPERS ================= */
-function randomPosition() {
-    const w = target.offsetWidth || 120;
-    const h = target.offsetHeight || 120;
-
-    const maxX = Math.max(0, innerWidth - w);
-    const maxY = Math.max(0, innerHeight - h);
-
-    target.style.left = Math.random() * maxX + "px";
-    target.style.top  = Math.random() * maxY + "px";
-}
-
-/* ================= START GAME ================= */
-function startGame() {
-    // 🔥 קודם כל UI — בלי תלות בסאונד
-    splash.hidden = true;
-    game.hidden = false;
-    randomPosition();
-
-    // 🎵 עכשיו ננסה לנגן סאונד (אם ייכשל — לא נורא)
-    try {
-        introAudio.currentTime = 0;
-        introAudio.play();
-    } catch (e) {
-        console.log("Intro sound blocked");
-    }
-}
-
-/* ================= EVENTS ================= */
-splashImg.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    startGame();
-});
-
-target.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-
-    try {
-        soundAudio.src = `sounds/${currentSound}.mp3`;
-        soundAudio.currentTime = 0;
-        soundAudio.play();
-    } catch (e) {
-        console.log("Sound blocked");
-    }
-
-    currentSound++;
-    if (currentSound > TOTAL_SOUNDS) currentSound = 1;
-
-    randomPosition();
-});
-
-/* ================= SERVICE WORKER ================= */
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js');
-}
-</script>
-
-</body>
-</html>    justify-content: center;
-    z-index: 10;
-}
-
-#splash img {
-    max-width: 92vw;
-    max-height: 92vh;
-    user-select: none;
-    -webkit-user-drag: none;
-}
-
-/* Target */
-#target {
-    position: absolute;
-    width: 120px;
-    height: 120px;
-    display: none;
-    user-select: none;
-    -webkit-user-drag: none;
-}
-</style>
-</head>
-
-<body>
-<div id="game">
-    <!-- Splash -->
-    <div id="splash">
-        <img id="splashImg" src="image.png" draggable="false">
-    </div>
-
-    <!-- Game -->
-    <img id="target" src="image.png" draggable="false">
-</div>
-
-<script>
-/* ================= CONFIG ================= */
-const TOTAL_SOUNDS = 48;
-let currentSound = 1;
-
-/* ================= ELEMENTS ================= */
-const splash = document.getElementById("splash");
-const splashImg = document.getElementById("splashImg");
-const target = document.getElementById("target");
-
-/* ================= AUDIO (Heart Popper rule) ================= */
-let audioCtx = null;
-let audioUnlocked = false;
-
-function playSound(src) {
-    const audio = new Audio(src);
-    const source = audioCtx.createMediaElementSource(audio);
-    source.connect(audioCtx.destination);
-    audio.play();
-}
-
-/* ================= HELPERS ================= */
-function randomPosition() {
-    const w = target.offsetWidth || 120;
-    const h = target.offsetHeight || 120;
-
-    const maxX = Math.max(0, innerWidth - w);
-    const maxY = Math.max(0, innerHeight - h);
-
-    target.style.left = Math.random() * maxX + "px";
-    target.style.top  = Math.random() * maxY + "px";
-}
-
-/* ================= START GAME ================= */
-function startGame() {
-    if (!audioUnlocked) {
-        // 🔑 הכל קורה בתוך מחוות המשתמש
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        audioCtx.resume();
-
-        audioUnlocked = true;
-        playSound("INTRO.mp3");
-    }
-
-    splash.style.display = "none";
-    target.style.display = "block";
-    randomPosition();
-}
-
-/* ================= EVENTS ================= */
-splashImg.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    startGame();
-}, { passive: false });
-
-target.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    if (!audioUnlocked) return;
-
-    playSound(`sounds/${currentSound}.mp3`);
-    currentSound++;
-    if (currentSound > TOTAL_SOUNDS) currentSound = 1;
-
-    randomPosition();
-}, { passive: false });
-
-/* ================= SERVICE WORKER ================= */
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js');
-}
-</script>
-</body>
-</html>    justify-content: center;
-    z-index: 10;
-}
-
-#splash img {
-    max-width: 92vw;
-    max-height: 92vh;
-    user-select: none;
-    -webkit-user-drag: none;
-}
-
-/* Target */
-#target {
-    position: absolute;
-    width: 120px;
-    height: 120px;
-    display: none;
-    user-select: none;
-    -webkit-user-drag: none;
-}
-</style>
-</head>
-
-<body>
-<div id="game">
-    <div id="splash">
-        <img id="splashImg" src="image.png" draggable="false">
-    </div>
-    <img id="target" src="image.png" draggable="false">
-</div>
-
-<script>
-/* ================= CONFIG ================= */
-const TOTAL_SOUNDS = 48;
-let currentSound = 1;
-
-/* ================= ELEMENTS ================= */
-const splash = document.getElementById("splash");
-const splashImg = document.getElementById("splashImg");
-const target = document.getElementById("target");
-
-/* ================= AUDIO (Heart-Popper style) ================= */
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-let audioUnlocked = false;
-
-function playSound(src) {
-    const audio = new Audio(src);
-    const track = audioCtx.createMediaElementSource(audio);
-    track.connect(audioCtx.destination);
-    audio.play();
-}
-
-/* ================= HELPERS ================= */
-function randomPosition() {
-    const w = target.offsetWidth || 120;
-    const h = target.offsetHeight || 120;
-
-    const maxX = Math.max(0, innerWidth - w);
-    const maxY = Math.max(0, innerHeight - h);
-
-    target.style.left = Math.random() * maxX + "px";
-    target.style.top  = Math.random() * maxY + "px";
-}
-
-/* ================= START GAME ================= */
-function startGame() {
-    if (!audioUnlocked) {
-        audioCtx.resume(); // 🔓 unlock audio
-        audioUnlocked = true;
-        playSound("INTRO.mp3");
-    }
-
-    splash.style.display = "none";
-    target.style.display = "block";
-    randomPosition();
-}
-
-/* ================= EVENTS ================= */
-splashImg.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    startGame();
-}, { passive: false });
-
-target.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    if (!audioUnlocked) return;
-
-    playSound(`sounds/${currentSound}.mp3`);
-    currentSound++;
-    if (currentSound > TOTAL_SOUNDS) currentSound = 1;
-
-    randomPosition();
-}, { passive: false });
-
-/* ================= SERVICE WORKER ================= */
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js');
-}
-</script>
-</body>
-</html>    justify-content: center;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: #ffffff;
     z-index: 10;
-}
+  }
 
-#splash img {
-    max-width: 92vw;
+  #splash img {
+    width: min(92vw, 92vh);
+    height: auto;
     max-height: 92vh;
+    object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;
-}
+    touch-action: none;
+  }
 
-/* Target */
-#target {
+  #hint {
     position: absolute;
-    width: 120px;
-    height: 120px;
-    display: none;
+    bottom: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: rgba(0,0,0,0.08);
+    color: #222;
+    font-size: 14px;
+    pointer-events: none;
+  }
+
+  /* Game target */
+  #target {
+    position: absolute;
+    width: 140px;
+    height: 140px;
     user-select: none;
     -webkit-user-drag: none;
-}
+    touch-action: none;
+    display: none; /* shown after intro click */
+  }
+
+  /* Debug console overlay (desktop friendly) */
+  #debug {
+    position: fixed;
+    left: 10px;
+    bottom: 10px;
+    width: min(520px, calc(100vw - 20px));
+    max-height: 40vh;
+    overflow: auto;
+    background: rgba(0,0,0,0.75);
+    color: #eaeaea;
+    font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    border-radius: 10px;
+    padding: 10px;
+    z-index: 999;
+    display: none;
+    white-space: pre-wrap;
+  }
+
+  #debugToggle {
+    position: fixed;
+    right: 10px;
+    bottom: 10px;
+    z-index: 1000;
+    padding: 10px 12px;
+    border-radius: 999px;
+    border: 0;
+    background: rgba(0,0,0,0.12);
+    color: #111;
+    font-size: 13px;
+  }
 </style>
 </head>
 
 <body>
-<div id="game">
-    <div id="splash">
-        <img id="splashImg" src="image.png" draggable="false">
-    </div>
-    <img id="target" src="image.png" draggable="false">
+<div id="app">
+  <!-- Splash -->
+  <div id="splash">
+    <img id="splashImg" src="image.png" alt="Start" />
+    <div id="hint">לחץ/י על התמונה להתחלה</div>
+  </div>
+
+  <!-- Game target -->
+  <img id="target" src="image.png" alt="Target" draggable="false" />
 </div>
 
-<script>
-/* ================= CONFIG ================= */
-const TOTAL_SOUNDS = 48;
-let currentSound = 1;
+<button id="debugToggle" type="button">Debug</button>
+<pre id="debug"></pre>
 
-/* ================= ELEMENTS ================= */
+<script>
+/* ===================== Assets naming =====================
+   Image:        image.png
+   Intro sound:  sounds/INTRO.mp3
+   Click sounds: sounds/1.mp3 ... sounds/48.mp3
+=========================================================== */
+
+const IMAGE_FILE = "image.png";
+const INTRO_SOUND = "sounds/INTRO.mp3";
+const TOTAL_SOUNDS = 48;
+
+let currentSound = 1;
+let gameStarted = false;
+
+// Single shared audio element (reduces mobile quirks)
+const audioPlayer = new Audio();
+audioPlayer.preload = "auto";
+
 const splash = document.getElementById("splash");
 const splashImg = document.getElementById("splashImg");
 const target = document.getElementById("target");
 
-/* ================= AUDIO (Web Audio – THE FIX) ================= */
-let audioCtx = null;
-let audioBuffers = {};
-let audioUnlocked = false;
+const debugEl = document.getElementById("debug");
+const debugToggle = document.getElementById("debugToggle");
+let debugVisible = false;
 
-/* Load audio file into buffer */
-async function loadSound(name, url) {
-    const res = await fetch(url);
-    const data = await res.arrayBuffer();
-    audioBuffers[name] = await audioCtx.decodeAudioData(data);
+function log(...args) {
+  console.log(...args);
+  // Also show in on-screen debug console (easy copy on desktop)
+  const msg = args.map(a => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
+  debugEl.textContent += msg + "\n";
+  debugEl.scrollTop = debugEl.scrollHeight;
 }
 
-/* Play buffer */
-function playBuffer(name) {
-    const src = audioCtx.createBufferSource();
-    src.buffer = audioBuffers[name];
-    src.connect(audioCtx.destination);
-    src.start(0);
+function setAssets() {
+  // In case you later change filenames
+  splashImg.src = IMAGE_FILE;
+  target.src = IMAGE_FILE;
 }
+setAssets();
 
-/* ================= HELPERS ================= */
+debugToggle.addEventListener("click", () => {
+  debugVisible = !debugVisible;
+  debugEl.style.display = debugVisible ? "block" : "none";
+  log("Debug:", debugVisible ? "ON" : "OFF");
+});
+
+// Capture errors for easy debugging
+window.addEventListener("error", (e) => {
+  log("❌ window.error:", e.message, "@", e.filename + ":" + e.lineno + ":" + e.colno);
+});
+window.addEventListener("unhandledrejection", (e) => {
+  log("❌ unhandledrejection:", e.reason ? (e.reason.message || String(e.reason)) : "unknown");
+});
+
+/* ===================== Helpers ===================== */
 function randomPosition() {
-    const w = target.offsetWidth || 120;
-    const h = target.offsetHeight || 120;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
 
-    const maxX = Math.max(0, innerWidth - w);
-    const maxY = Math.max(0, innerHeight - h);
+  const tw = target.offsetWidth || 140;
+  const th = target.offsetHeight || 140;
 
-    target.style.left = Math.random() * maxX + "px";
-    target.style.top  = Math.random() * maxY + "px";
+  const maxX = Math.max(0, w - tw);
+  const maxY = Math.max(0, h - th);
+
+  const x = Math.random() * maxX;
+  const y = Math.random() * maxY;
+
+  target.style.left = x + "px";
+  target.style.top  = y + "px";
 }
 
-/* ================= START GAME ================= */
-async function startGame() {
-    if (audioUnlocked) return;
+function playFile(src) {
+  // Stop anything currently playing
+  audioPlayer.pause();
+  audioPlayer.currentTime = 0;
 
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  audioPlayer.src = src;
 
-    // Load intro
-    await loadSound("intro", "INTRO.mp3");
-
-    // Load game sounds
-    for (let i = 1; i <= TOTAL_SOUNDS; i++) {
-        await loadSound(i, `sounds/${i}.mp3`);
-    }
-
-    audioUnlocked = true;
-
-    // Play intro
-    playBuffer("intro");
-
-    // Switch UI
-    splash.style.display = "none";
-    target.style.display = "block";
-    randomPosition();
+  const p = audioPlayer.play();
+  if (p && typeof p.then === "function") {
+    p.then(() => log("▶️ Playing:", src))
+     .catch(err => log("⚠️ play() blocked/failed for", src, "-", err && err.message ? err.message : String(err)));
+  } else {
+    // Older browsers
+    log("▶️ Playing (no promise):", src);
+  }
 }
 
-/* ================= EVENTS ================= */
-splashImg.addEventListener("touchstart", async (e) => {
-    e.preventDefault();
-    await startGame();
+function playNextSound() {
+  const src = `sounds/${currentSound}.mp3`;
+  playFile(src);
+
+  currentSound++;
+  if (currentSound > TOTAL_SOUNDS) currentSound = 1;
+}
+
+/* ===================== Start flow ===================== */
+function startGameFromSplash() {
+  if (gameStarted) return;
+  gameStarted = true;
+
+  // 1) First user gesture happens here => best chance to unlock audio
+  playFile(INTRO_SOUND);
+
+  // 2) Move into game mode
+  splash.style.display = "none";
+  target.style.display = "block";
+
+  randomPosition();
+  log("✅ Game started");
+}
+
+/* Use pointer events so it works on desktop + mobile */
+splash.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  startGameFromSplash();
 }, { passive: false });
 
-target.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    if (!audioUnlocked) return;
+/* ===================== Game interaction ===================== */
+target.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  if (!gameStarted) return;
 
-    playBuffer(currentSound);
-    currentSound++;
-    if (currentSound > TOTAL_SOUNDS) currentSound = 1;
-
-    randomPosition();
+  playNextSound();
+  randomPosition();
 }, { passive: false });
 
-/* ================= SERVICE WORKER ================= */
-if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js');
+window.addEventListener("resize", () => {
+  if (gameStarted) randomPosition();
+});
+
+/* ===================== Service Worker ===================== */
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js")
+    .then(reg => log("✅ SW registered. scope:", reg.scope))
+    .catch(err => log("❌ SW registration failed:", err && err.message ? err.message : String(err)));
 }
+
+log("Ready. Click the big image to start.");
 </script>
 </body>
 </html>
-
-
-
-
-
