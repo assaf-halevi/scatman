@@ -22,19 +22,122 @@ html, body {
     touch-action: none;
 }
 
-#game {
+#splash, #game {
     position: fixed;
     inset: 0;
 }
 
-/* Splash */
 #splash {
-    position: fixed;
-    inset: 0;
-    background: #ffffff;
     display: flex;
     align-items: center;
     justify-content: center;
+    background: #ffffff;
+    z-index: 10;
+}
+
+#splash img {
+    max-width: 92vw;
+    max-height: 92vh;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+#target {
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+</style>
+</head>
+
+<body>
+
+<!-- Splash -->
+<div id="splash">
+    <img id="splashImg" src="image.png" draggable="false">
+</div>
+
+<!-- Game -->
+<div id="game" hidden>
+    <img id="target" src="image.png" draggable="false">
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const TOTAL_SOUNDS = 48;
+let currentSound = 1;
+
+/* ================= ELEMENTS ================= */
+const splash = document.getElementById("splash");
+const splashImg = document.getElementById("splashImg");
+const game = document.getElementById("game");
+const target = document.getElementById("target");
+
+/* ================= AUDIO ================= */
+let introAudio = new Audio("INTRO.mp3");
+let soundAudio = new Audio();
+
+/* ================= HELPERS ================= */
+function randomPosition() {
+    const w = target.offsetWidth || 120;
+    const h = target.offsetHeight || 120;
+
+    const maxX = Math.max(0, innerWidth - w);
+    const maxY = Math.max(0, innerHeight - h);
+
+    target.style.left = Math.random() * maxX + "px";
+    target.style.top  = Math.random() * maxY + "px";
+}
+
+/* ================= START GAME ================= */
+function startGame() {
+    // 🔥 קודם כל UI — בלי תלות בסאונד
+    splash.hidden = true;
+    game.hidden = false;
+    randomPosition();
+
+    // 🎵 עכשיו ננסה לנגן סאונד (אם ייכשל — לא נורא)
+    try {
+        introAudio.currentTime = 0;
+        introAudio.play();
+    } catch (e) {
+        console.log("Intro sound blocked");
+    }
+}
+
+/* ================= EVENTS ================= */
+splashImg.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    startGame();
+});
+
+target.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+
+    try {
+        soundAudio.src = `sounds/${currentSound}.mp3`;
+        soundAudio.currentTime = 0;
+        soundAudio.play();
+    } catch (e) {
+        console.log("Sound blocked");
+    }
+
+    currentSound++;
+    if (currentSound > TOTAL_SOUNDS) currentSound = 1;
+
+    randomPosition();
+});
+
+/* ================= SERVICE WORKER ================= */
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+}
+</script>
+
+</body>
+</html>    justify-content: center;
     z-index: 10;
 }
 
@@ -363,5 +466,6 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+
 
 
