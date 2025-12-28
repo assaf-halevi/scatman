@@ -59,6 +59,112 @@ html, body {
 
 <body>
 <div id="game">
+    <!-- Splash -->
+    <div id="splash">
+        <img id="splashImg" src="image.png" draggable="false">
+    </div>
+
+    <!-- Game -->
+    <img id="target" src="image.png" draggable="false">
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const TOTAL_SOUNDS = 48;
+let currentSound = 1;
+
+/* ================= ELEMENTS ================= */
+const splash = document.getElementById("splash");
+const splashImg = document.getElementById("splashImg");
+const target = document.getElementById("target");
+
+/* ================= AUDIO (Heart Popper rule) ================= */
+let audioCtx = null;
+let audioUnlocked = false;
+
+function playSound(src) {
+    const audio = new Audio(src);
+    const source = audioCtx.createMediaElementSource(audio);
+    source.connect(audioCtx.destination);
+    audio.play();
+}
+
+/* ================= HELPERS ================= */
+function randomPosition() {
+    const w = target.offsetWidth || 120;
+    const h = target.offsetHeight || 120;
+
+    const maxX = Math.max(0, innerWidth - w);
+    const maxY = Math.max(0, innerHeight - h);
+
+    target.style.left = Math.random() * maxX + "px";
+    target.style.top  = Math.random() * maxY + "px";
+}
+
+/* ================= START GAME ================= */
+function startGame() {
+    if (!audioUnlocked) {
+        // 🔑 הכל קורה בתוך מחוות המשתמש
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtx.resume();
+
+        audioUnlocked = true;
+        playSound("INTRO.mp3");
+    }
+
+    splash.style.display = "none";
+    target.style.display = "block";
+    randomPosition();
+}
+
+/* ================= EVENTS ================= */
+splashImg.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    startGame();
+}, { passive: false });
+
+target.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    if (!audioUnlocked) return;
+
+    playSound(`sounds/${currentSound}.mp3`);
+    currentSound++;
+    if (currentSound > TOTAL_SOUNDS) currentSound = 1;
+
+    randomPosition();
+}, { passive: false });
+
+/* ================= SERVICE WORKER ================= */
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>    justify-content: center;
+    z-index: 10;
+}
+
+#splash img {
+    max-width: 92vw;
+    max-height: 92vh;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+/* Target */
+#target {
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    display: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+</style>
+</head>
+
+<body>
+<div id="game">
     <div id="splash">
         <img id="splashImg" src="image.png" draggable="false">
     </div>
@@ -257,4 +363,5 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+
 
