@@ -1,40 +1,60 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="he">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport"
-      content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no">
-<title>Tap & Jump</title>
-<link rel="manifest" href="manifest.json">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="theme-color" content="#ffffff">
-<style>
-html, body {
-    margin: 0;
-    padding: 0;
-    background: #ffffff;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    touch-action: none;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
-#game {
-    position: fixed;
-    inset: 0;
-    background: #ffffff;
-}
-/* Splash */
-#splash {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: #ffffff;
-    z-index: 10;
-    cursor: pointer;
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Audio Test</title>
+  <style>
+    html, body { height: 100%; margin: 0; background: #fff; }
+    body { display: grid; place-items: center; font-family: system-ui, Arial; }
+    button { font-size: 24px; padding: 18px 26px; }
+    #log { margin-top: 16px; font-size: 14px; white-space: pre-wrap; max-width: 90vw; }
+  </style>
+</head>
+<body>
+  <div>
+    <button id="btn">נגן INTRO.mp3</button>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    const btn = document.getElementById('btn');
+    const log = document.getElementById('log');
+
+    function println(s) {
+      log.textContent += s + "\n";
+    }
+
+    btn.addEventListener('click', async () => {
+      log.textContent = "";
+      println("Clicked.");
+
+      // Create a fresh audio element
+      const a = new Audio("INTRO.mp3");
+      a.preload = "auto";
+
+      // Helpful event logs
+      a.addEventListener("error", () => {
+        const code = a.error?.code;
+        println("Audio error. code=" + code + " (1=ABORTED,2=NETWORK,3=DECODE,4=SRC_NOT_SUPPORTED)");
+      });
+
+      a.addEventListener("loadedmetadata", () => println("loadedmetadata"));
+      a.addEventListener("canplay", () => println("canplay"));
+      a.addEventListener("playing", () => println("playing"));
+      a.addEventListener("ended", () => println("ended"));
+
+      try {
+        await a.play();
+        println("play() resolved ✅");
+      } catch (err) {
+        println("play() rejected ❌");
+        println(String(err));
+      }
+    });
+  </script>
+</body>
+</html>    cursor: pointer;
 }
 #splash img {
     max-width: 92vw;
@@ -781,6 +801,7 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+
 
 
 
