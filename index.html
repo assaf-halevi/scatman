@@ -130,7 +130,7 @@
 =========================================================== */
 
 const IMAGE_FILE = "image.png";
-const INTRO_SOUND = "sounds/INTRO.mp3";
+const INTRO_SOUND = "INTRO.mp3";
 const TOTAL_SOUNDS = 48;
 
 let currentSound = 1;
@@ -213,7 +213,7 @@ function playFile(src) {
 }
 
 function playNextSound() {
-  const src = `sounds/${currentSound}.mp3`;
+  const src = `/${currentSound}.mp3`;
   playFile(src);
 
   currentSound++;
@@ -266,3 +266,4 @@ log("Ready. Click the big image to start.");
 </script>
 </body>
 </html>
+
