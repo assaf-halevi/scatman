@@ -4,13 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport"
       content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no">
-
 <title>Tap & Jump</title>
-
 <link rel="manifest" href="manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#ffffff">
-
 <style>
 html, body {
     margin: 0;
@@ -20,21 +17,339 @@ html, body {
     height: 100%;
     overflow: hidden;
     touch-action: none;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
-
-#splash, #game {
+#game {
     position: fixed;
     inset: 0;
+    background: #ffffff;
 }
-
+/* Splash */
 #splash {
+    position: fixed;
+    inset: 0;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     background: #ffffff;
     z-index: 10;
+    cursor: pointer;
+}
+#splash img {
+    max-width: 92vw;
+    max-height: 92vh;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+#loadingStatus {
+    position: absolute;
+    bottom: 20%;
+    color: #333;
+    font-size: 16px;
+    display: none;
+}
+#progressBar {
+    width: 200px;
+    height: 4px;
+    background: #eee;
+    border-radius: 2px;
+    margin-top: 10px;
+    overflow: hidden;
+}
+#progressFill {
+    width: 0%;
+    height: 100%;
+    background: #4CAF50;
+    transition: width 0.3s;
+}
+/* Target */
+#target {
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    display: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+#target:active {
+    transform: scale(0.95);
+}
+/* Error message */
+#errorMsg {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #f44336;
+    color: white;
+    padding: 20px;
+    border-radius: 8px;
+    display: none;
+    z-index: 100;
+    max-width: 80%;
+    text-align: center;
+}
+</style>
+</head>
+<body>
+<div id="game">
+    <div id="splash">
+        <img id="splashImg" src="image.png" draggable="false">
+        <div id="loadingStatus">
+            <div>טוען קבצי שמע... <span id="loadingPercent">0%</span></div>
+            <div id="progressBar">
+                <div id="progressFill"></div>
+            </div>
+        </div>
+    </div>
+    <img id="target" src="image.png" draggable="false">
+    <div id="errorMsg"></div>
+</div>
+
+<script>
+/* ================= CONFIG ================= */
+const TOTAL_SOUNDS = 48;
+let currentSound = 1;
+const DEBUG = true; // Set to false in production
+
+/* ================= ELEMENTS ================= */
+const splash = document.getElementById("splash");
+const splashImg = document.getElementById("splashImg");
+const target = document.getElementById("target");
+const loadingStatus = document.getElementById("loadingStatus");
+const loadingPercent = document.getElementById("loadingPercent");
+const progressFill = document.getElementById("progressFill");
+const errorMsg = document.getElementById("errorMsg");
+
+/* ================= AUDIO ================= */
+let audioCtx = null;
+let audioBuffers = {};
+let audioUnlocked = false;
+let isLoading = false;
+
+function log(...args) {
+    if (DEBUG) console.log('[TapJump]', ...args);
 }
 
+function showError(msg) {
+    errorMsg.textContent = msg;
+    errorMsg.style.display = 'block';
+    setTimeout(() => {
+        errorMsg.style.display = 'none';
+    }, 5000);
+}
+
+/* Load audio file into buffer with retry logic */
+async function loadSound(name, url, retries = 3) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            log(`Loading ${url} (attempt ${attempt})`);
+            const res = await fetch(url);
+            
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            }
+            
+            const data = await res.arrayBuffer();
+            audioBuffers[name] = await audioCtx.decodeAudioData(data);
+            log(`✓ Loaded: ${url}`);
+            return true;
+            
+        } catch (err) {
+            log(`✗ Failed to load ${url} (attempt ${attempt}):`, err.message);
+            
+            if (attempt === retries) {
+                // Create silent buffer as fallback
+                log(`Creating silent buffer for ${name}`);
+                audioBuffers[name] = audioCtx.createBuffer(
+                    1, 
+                    audioCtx.sampleRate * 0.1, 
+                    audioCtx.sampleRate
+                );
+                return false;
+            }
+            
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+}
+
+/* Play buffer safely */
+function playBuffer(name) {
+    try {
+        if (!audioCtx) {
+            log('AudioContext not initialized');
+            return;
+        }
+        
+        if (!audioBuffers[name]) {
+            log(`Buffer ${name} not found`);
+            return;
+        }
+        
+        const src = audioCtx.createBufferSource();
+        src.buffer = audioBuffers[name];
+        src.connect(audioCtx.destination);
+        src.start(0);
+        log(`Playing: ${name}`);
+        
+    } catch (err) {
+        log(`Error playing ${name}:`, err);
+    }
+}
+
+/* ================= HELPERS ================= */
+function randomPosition() {
+    const w = target.offsetWidth || 120;
+    const h = target.offsetHeight || 120;
+    const maxX = Math.max(0, window.innerWidth - w);
+    const maxY = Math.max(0, window.innerHeight - h);
+    target.style.left = Math.floor(Math.random() * maxX) + "px";
+    target.style.top = Math.floor(Math.random() * maxY) + "px";
+}
+
+function updateProgress(loaded, total) {
+    const percent = Math.round((loaded / total) * 100);
+    loadingPercent.textContent = `${percent}%`;
+    progressFill.style.width = `${percent}%`;
+}
+
+/* ================= START GAME ================= */
+async function startGame() {
+    if (audioUnlocked || isLoading) {
+        log('Game already started or loading');
+        return;
+    }
+    
+    isLoading = true;
+    log('=== Starting game ===');
+
+    try {
+        // Create audio context
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        log('AudioContext created, state:', audioCtx.state);
+
+        // CRITICAL: Resume context (required for iOS/Safari)
+        if (audioCtx.state === 'suspended') {
+            log('Resuming suspended AudioContext...');
+            await audioCtx.resume();
+            log('AudioContext resumed, new state:', audioCtx.state);
+        }
+
+        // Show loading UI
+        loadingStatus.style.display = 'block';
+        splashImg.style.opacity = '0.5';
+        
+        // Load intro
+        log('Loading INTRO.mp3...');
+        updateProgress(0, TOTAL_SOUNDS + 1);
+        await loadSound("intro", "INTRO.mp3");
+        updateProgress(1, TOTAL_SOUNDS + 1);
+
+        // Load game sounds in parallel (much faster)
+        log(`Loading ${TOTAL_SOUNDS} game sounds...`);
+        const loadPromises = [];
+        
+        for (let i = 1; i <= TOTAL_SOUNDS; i++) {
+            const promise = loadSound(i, `sounds/${i}.mp3`).then(() => {
+                updateProgress(i + 1, TOTAL_SOUNDS + 1);
+            });
+            loadPromises.push(promise);
+        }
+        
+        await Promise.all(loadPromises);
+        
+        log('✓ All sounds loaded!');
+        audioUnlocked = true;
+
+        // Play intro
+        log('Playing intro...');
+        playBuffer("intro");
+
+        // Switch UI
+        loadingStatus.style.display = 'none';
+        splash.style.display = 'none';
+        target.style.display = 'block';
+        randomPosition();
+        
+        log('=== Game ready! ===');
+        
+    } catch (err) {
+        log('✗ FATAL ERROR:', err);
+        showError('שגיאה בטעינת המשחק: ' + err.message);
+        loadingStatus.style.display = 'none';
+        splashImg.style.opacity = '1';
+        isLoading = false;
+    }
+}
+
+/* ================= EVENTS ================= */
+
+// Touch events (mobile)
+splashImg.addEventListener("touchstart", async (e) => {
+    e.preventDefault();
+    log('Splash touched');
+    await startGame();
+}, { passive: false });
+
+// Click events (desktop)
+splashImg.addEventListener("click", async (e) => {
+    e.preventDefault();
+    log('Splash clicked');
+    await startGame();
+});
+
+// Target touch
+target.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    if (!audioUnlocked) {
+        log('Target touched but audio not unlocked');
+        return;
+    }
+
+    log(`Playing sound ${currentSound}`);
+    playBuffer(currentSound);
+    
+    currentSound++;
+    if (currentSound > TOTAL_SOUNDS) currentSound = 1;
+
+    randomPosition();
+}, { passive: false });
+
+// Target click (desktop)
+target.addEventListener("click", (e) => {
+    e.preventDefault();
+    if (!audioUnlocked) {
+        log('Target clicked but audio not unlocked');
+        return;
+    }
+
+    log(`Playing sound ${currentSound}`);
+    playBuffer(currentSound);
+    
+    currentSound++;
+    if (currentSound > TOTAL_SOUNDS) currentSound = 1;
+
+    randomPosition();
+});
+
+/* ================= SERVICE WORKER ================= */
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js')
+        .then(() => log('Service Worker registered'))
+        .catch(err => log('Service Worker registration failed:', err));
+}
+
+// Log initial state
+log('Page loaded. Touch/click the image to start.');
+log('User agent:', navigator.userAgent);
+</script>
+</body>
+</html>
 #splash img {
     max-width: 92vw;
     max-height: 92vh;
@@ -466,6 +781,7 @@ if ('serviceWorker' in navigator) {
 </script>
 </body>
 </html>
+
 
 
 
