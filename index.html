@@ -2,7 +2,8 @@
 <html lang="he">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no" />
+<meta name="viewport"
+      content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no" />
 <title>Tap & Jump</title>
 
 <!-- PWA -->
@@ -11,7 +12,7 @@
 <meta name="theme-color" content="#ffffff">
 
 <style>
-  html, body {
+html, body {
     margin: 0;
     padding: 0;
     background: #ffffff;
@@ -19,18 +20,16 @@
     height: 100%;
     overflow: hidden;
     touch-action: none;
-    font-family: system-ui, Arial, sans-serif;
-  }
+}
 
-  /* Fullscreen app area */
-  #app {
+#app {
     position: fixed;
     inset: 0;
     background: #ffffff;
-  }
+}
 
-  /* Splash screen (start screen) */
-  #splash {
+/* Splash screen */
+#splash {
     position: absolute;
     inset: 0;
     display: flex;
@@ -38,231 +37,115 @@
     justify-content: center;
     background: #ffffff;
     z-index: 10;
-  }
+}
 
-  #splash img {
+#splash img {
     width: min(92vw, 92vh);
-    height: auto;
     max-height: 92vh;
     object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;
-    touch-action: none;
-  }
+}
 
-  #hint {
-    position: absolute;
-    bottom: 18px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 10px 14px;
-    border-radius: 999px;
-    background: rgba(0,0,0,0.08);
-    color: #222;
-    font-size: 14px;
-    pointer-events: none;
-  }
-
-  /* Game target */
-  #target {
+/* Game target */
+#target {
     position: absolute;
     width: 140px;
     height: 140px;
+    display: none;
     user-select: none;
     -webkit-user-drag: none;
-    touch-action: none;
-    display: none; /* shown after intro click */
-  }
-
-  /* Debug console overlay (desktop friendly) */
-  #debug {
-    position: fixed;
-    left: 10px;
-    bottom: 10px;
-    width: min(520px, calc(100vw - 20px));
-    max-height: 40vh;
-    overflow: auto;
-    background: rgba(0,0,0,0.75);
-    color: #eaeaea;
-    font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    border-radius: 10px;
-    padding: 10px;
-    z-index: 999;
-    display: none;
-    white-space: pre-wrap;
-  }
-
-  #debugToggle {
-    position: fixed;
-    right: 10px;
-    bottom: 10px;
-    z-index: 1000;
-    padding: 10px 12px;
-    border-radius: 999px;
-    border: 0;
-    background: rgba(0,0,0,0.12);
-    color: #111;
-    font-size: 13px;
-  }
+}
 </style>
 </head>
 
 <body>
 <div id="app">
-  <!-- Splash -->
-  <div id="splash">
-    <img id="splashImg" src="image.png" alt="Start" />
-    <div id="hint">לחץ/י על התמונה להתחלה</div>
-  </div>
+    <!-- Start screen -->
+    <div id="splash">
+        <img id="splashImg" src="image.png" alt="Start">
+    </div>
 
-  <!-- Game target -->
-  <img id="target" src="image.png" alt="Target" draggable="false" />
+    <!-- Game image -->
+    <img id="target" src="image.png" alt="Target" draggable="false">
 </div>
 
-<button id="debugToggle" type="button">Debug</button>
-<pre id="debug"></pre>
-
 <script>
-/* ===================== Assets naming =====================
-   Image:        image.png
-   Intro sound:  sounds/INTRO.mp3
-   Click sounds: sounds/1.mp3 ... sounds/48.mp3
-=========================================================== */
-
-const IMAGE_FILE = "image.png";
-const INTRO_SOUND = "INTRO.mp3";
+/* ================= Config ================= */
 const TOTAL_SOUNDS = 48;
-
 let currentSound = 1;
 let gameStarted = false;
 
-// Single shared audio element (reduces mobile quirks)
+/* Shared audio element (mobile-safe) */
 const audioPlayer = new Audio();
 audioPlayer.preload = "auto";
 
 const splash = document.getElementById("splash");
-const splashImg = document.getElementById("splashImg");
 const target = document.getElementById("target");
 
-const debugEl = document.getElementById("debug");
-const debugToggle = document.getElementById("debugToggle");
-let debugVisible = false;
-
-function log(...args) {
-  console.log(...args);
-  // Also show in on-screen debug console (easy copy on desktop)
-  const msg = args.map(a => (typeof a === "string" ? a : JSON.stringify(a))).join(" ");
-  debugEl.textContent += msg + "\n";
-  debugEl.scrollTop = debugEl.scrollHeight;
-}
-
-function setAssets() {
-  // In case you later change filenames
-  splashImg.src = IMAGE_FILE;
-  target.src = IMAGE_FILE;
-}
-setAssets();
-
-debugToggle.addEventListener("click", () => {
-  debugVisible = !debugVisible;
-  debugEl.style.display = debugVisible ? "block" : "none";
-  log("Debug:", debugVisible ? "ON" : "OFF");
-});
-
-// Capture errors for easy debugging
-window.addEventListener("error", (e) => {
-  log("❌ window.error:", e.message, "@", e.filename + ":" + e.lineno + ":" + e.colno);
-});
-window.addEventListener("unhandledrejection", (e) => {
-  log("❌ unhandledrejection:", e.reason ? (e.reason.message || String(e.reason)) : "unknown");
-});
-
-/* ===================== Helpers ===================== */
+/* ================= Helpers ================= */
 function randomPosition() {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+    const w = window.innerWidth;
+    const h = window.innerHeight;
 
-  const tw = target.offsetWidth || 140;
-  const th = target.offsetHeight || 140;
+    const tw = target.offsetWidth || 140;
+    const th = target.offsetHeight || 140;
 
-  const maxX = Math.max(0, w - tw);
-  const maxY = Math.max(0, h - th);
+    const x = Math.random() * Math.max(0, w - tw);
+    const y = Math.random() * Math.max(0, h - th);
 
-  const x = Math.random() * maxX;
-  const y = Math.random() * maxY;
-
-  target.style.left = x + "px";
-  target.style.top  = y + "px";
+    target.style.left = x + "px";
+    target.style.top  = y + "px";
 }
 
 function playFile(src) {
-  // Stop anything currently playing
-  audioPlayer.pause();
-  audioPlayer.currentTime = 0;
-
-  audioPlayer.src = src;
-
-  const p = audioPlayer.play();
-  if (p && typeof p.then === "function") {
-    p.then(() => log("▶️ Playing:", src))
-     .catch(err => log("⚠️ play() blocked/failed for", src, "-", err && err.message ? err.message : String(err)));
-  } else {
-    // Older browsers
-    log("▶️ Playing (no promise):", src);
-  }
+    audioPlayer.pause();
+    audioPlayer.currentTime = 0;
+    audioPlayer.src = src;
+    audioPlayer.play().catch(() => {
+        /* אם דפדפן חוסם – אין קריסה */
+    });
 }
 
 function playNextSound() {
-  const src = `${currentSound}.mp3`;
-  playFile(src);
-
-  currentSound++;
-  if (currentSound > TOTAL_SOUNDS) currentSound = 1;
+    playFile(`${currentSound}.mp3`);
+    currentSound++;
+    if (currentSound > TOTAL_SOUNDS) currentSound = 1;
 }
 
-/* ===================== Start flow ===================== */
-function startGameFromSplash() {
-  if (gameStarted) return;
-  gameStarted = true;
+/* ================= Start flow ================= */
+function startGame() {
+    if (gameStarted) return;
+    gameStarted = true;
 
-  // 1) First user gesture happens here => best chance to unlock audio
-  playFile(INTRO_SOUND);
+    // First user gesture → unlock audio
+    playFile("INTRO.mp3");
 
-  // 2) Move into game mode
-  splash.style.display = "none";
-  target.style.display = "block";
-
-  randomPosition();
-  log("✅ Game started");
+    splash.style.display = "none";
+    target.style.display = "block";
+    randomPosition();
 }
 
-/* Use pointer events so it works on desktop + mobile */
-splash.addEventListener("pointerdown", (e) => {
-  e.preventDefault();
-  startGameFromSplash();
+/* Pointer events = עובד גם במחשב וגם בטלפון */
+splash.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    startGame();
 }, { passive: false });
 
-/* ===================== Game interaction ===================== */
-target.addEventListener("pointerdown", (e) => {
-  e.preventDefault();
-  if (!gameStarted) return;
-
-  playNextSound();
-  randomPosition();
+target.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    playNextSound();
+    randomPosition();
 }, { passive: false });
 
 window.addEventListener("resize", () => {
-  if (gameStarted) randomPosition();
+    if (gameStarted) randomPosition();
 });
 
-/* ===================== Service Worker ===================== */
+/* ================= Service Worker ================= */
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("sw.js")
-    .then(reg => log("✅ SW registered. scope:", reg.scope))
-    .catch(err => log("❌ SW registration failed:", err && err.message ? err.message : String(err)));
+    navigator.serviceWorker.register("sw.js");
 }
-
-log("Ready. Click the big image to start.");
 </script>
 </body>
 </html>
