@@ -26,63 +26,133 @@ html, body {
 #game {
     position: fixed;
     inset: 0;
+    background: #ffffff;
 }
 
+/* מסך פתיחה */
+#splash {
+    position: fixed;
+    inset: 0;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+#splashImg {
+    max-width: 92vw;
+    max-height: 92vh;
+    width: auto;
+    height: auto;
+    user-select: none;
+    -webkit-user-drag: none;
+    touch-action: none;
+}
+
+/* תמונת המשחק (קופצת) */
 #target {
     position: absolute;
     width: 120px;
     height: 120px;
-    touch-action: none;
     user-select: none;
+    -webkit-user-drag: none;
+    touch-action: none;
+    display: none; /* יופיע אחרי פתיחה */
 }
 </style>
 </head>
 
 <body>
 <div id="game">
-    <img id="target" src="image.png" draggable="false">
+    <!-- Splash screen -->
+    <div id="splash">
+        <img id="splashImg" src="image.png" alt="start" draggable="false">
+    </div>
+
+    <!-- Game target -->
+    <img id="target" src="image.png" draggable="false" alt="target">
 </div>
 
 <script>
 /* ================= Config ================= */
-const TOTAL_SOUNDS = 48;
+const TOTAL_SOUNDS = 48;     // sounds/1.mp3 ... sounds/48.mp3
 let currentSound = 1;
 
+const splash = document.getElementById("splash");
+const splashImg = document.getElementById("splashImg");
 const target = document.getElementById("target");
+
+let gameStarted = false;
+
+/* ================= Audio (single player) ================= */
+const audioPlayer = new Audio();
+audioPlayer.preload = "auto";
 
 /* ================= Helpers ================= */
 function randomPosition() {
-    const maxX = window.innerWidth  - target.offsetWidth;
-    const maxY = window.innerHeight - target.offsetHeight;
+    const w = target.offsetWidth || 120;
+    const h = target.offsetHeight || 120;
 
-    const x = Math.random() * maxX;
-    const y = Math.random() * maxY;
+    const maxX = Math.max(0, window.innerWidth - w);
+    const maxY = Math.max(0, window.innerHeight - h);
 
-    target.style.left = x + "px";
-    target.style.top  = y + "px";
+    target.style.left = (Math.random() * maxX) + "px";
+    target.style.top  = (Math.random() * maxY) + "px";
+}
+
+function playIntro() {
+    audioPlayer.src = "INTRO.mp3";  // אתה תספק
+    audioPlayer.currentTime = 0;
+    return audioPlayer.play();
 }
 
 function playNextSound() {
-    const audio = new Audio(`sounds/${currentSound}.mp3`);
-    audio.play();
+    audioPlayer.src = `sounds/${currentSound}.mp3`;
+    audioPlayer.currentTime = 0;
+    audioPlayer.play();
 
     currentSound++;
-    if (currentSound > TOTAL_SOUNDS) {
-        currentSound = 1;
-    }
+    if (currentSound > TOTAL_SOUNDS) currentSound = 1;
 }
 
-/* ================= Interaction ================= */
-target.addEventListener("touchstart", e => {
+/* ================= Start game ================= */
+function startGame() {
+    if (gameStarted) return;
+    gameStarted = true;
+
+    // Hide splash, show target
+    splash.style.display = "none";
+    target.style.display = "block";
+
+    // Place target randomly
+    randomPosition();
+
+    // Play intro (this user gesture should unlock audio on Android)
+    playIntro().catch(() => {
+        // אם נכשל, עדיין ממשיכים. בד"כ זה כן יצליח כי זו לחיצה.
+    });
+}
+
+/* ================= Touch handlers ================= */
+// לחיצה על מסך הפתיחה
+splashImg.addEventListener("touchstart", (e) => {
     e.preventDefault();
+    startGame();
+}, { passive: false });
+
+// אחרי שהמשחק התחיל: לחיצה על התמונה הקטנה
+target.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    if (!gameStarted) return;
 
     playNextSound();
     randomPosition();
-});
+}, { passive: false });
 
-/* ================= Init ================= */
-window.addEventListener("load", () => {
-    randomPosition();
+/* ================= Resize ================= */
+window.addEventListener("resize", () => {
+    if (gameStarted) randomPosition();
 });
 
 /* ================= Service Worker ================= */
