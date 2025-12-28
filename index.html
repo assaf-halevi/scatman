@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no">
+
+<title>Tap & Jump</title>
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ffffff">
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    background: #ffffff;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    touch-action: none;
+}
+
+#game {
+    position: fixed;
+    inset: 0;
+}
+
+#target {
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    touch-action: none;
+    user-select: none;
+}
+</style>
+</head>
+
+<body>
+<div id="game">
+    <img id="target" src="image.png" draggable="false">
+</div>
+
+<script>
+/* ================= Config ================= */
+const TOTAL_SOUNDS = 48;
+let currentSound = 1;
+
+const target = document.getElementById("target");
+
+/* ================= Helpers ================= */
+function randomPosition() {
+    const maxX = window.innerWidth  - target.offsetWidth;
+    const maxY = window.innerHeight - target.offsetHeight;
+
+    const x = Math.random() * maxX;
+    const y = Math.random() * maxY;
+
+    target.style.left = x + "px";
+    target.style.top  = y + "px";
+}
+
+function playNextSound() {
+    const audio = new Audio(`sounds/${currentSound}.mp3`);
+    audio.play();
+
+    currentSound++;
+    if (currentSound > TOTAL_SOUNDS) {
+        currentSound = 1;
+    }
+}
+
+/* ================= Interaction ================= */
+target.addEventListener("touchstart", e => {
+    e.preventDefault();
+
+    playNextSound();
+    randomPosition();
+});
+
+/* ================= Init ================= */
+window.addEventListener("load", () => {
+    randomPosition();
+});
+
+/* ================= Service Worker ================= */
+if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+}
+</script>
+</body>
+</html>
