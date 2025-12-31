@@ -61,12 +61,10 @@ html, body {
 
 <body>
 <div id="app">
-    <!-- Start screen -->
     <div id="splash">
         <img id="splashImg" src="image.png" alt="Start">
     </div>
 
-    <!-- Game image -->
     <img id="target" src="image.png" alt="Target" draggable="false">
 </div>
 
@@ -76,9 +74,30 @@ const TOTAL_SOUNDS = 48;
 let currentSound = 1;
 let gameStarted = false;
 
-/* Shared audio element (mobile-safe) */
-const audioPlayer = new Audio();
+/* Sound players */
+const audioPlayer = new Audio(); // short sounds
 audioPlayer.preload = "auto";
+
+const bgPlayer = new Audio();    // background music
+bgPlayer.loop = true;
+bgPlayer.preload = "auto";
+
+let currentBg = null;
+
+/* Background music switch map */
+const BG_MAP = {
+    1:  "mus1.mp3",
+    7:  "mus2-1.mp3",
+    9:  "mus2-2.mp3",
+    13: "mus3.mp3",
+    19: "mus4-1.mp3",
+    21: "mus4-2.mp3",
+    25: "mus5.mp3",
+    31: "mus6.mp3",
+    37: "mus7.mp3",
+    43: "mus8-1.mp3",
+    45: "mus8-2.mp3"
+};
 
 const splash = document.getElementById("splash");
 const target = document.getElementById("target");
@@ -87,28 +106,41 @@ const target = document.getElementById("target");
 function randomPosition() {
     const w = window.innerWidth;
     const h = window.innerHeight;
-
     const tw = target.offsetWidth || 140;
     const th = target.offsetHeight || 140;
 
-    const x = Math.random() * Math.max(0, w - tw);
-    const y = Math.random() * Math.max(0, h - th);
-
-    target.style.left = x + "px";
-    target.style.top  = y + "px";
+    target.style.left = Math.random() * (w - tw) + "px";
+    target.style.top  = Math.random() * (h - th) + "px";
 }
 
 function playFile(src) {
     audioPlayer.pause();
     audioPlayer.currentTime = 0;
     audioPlayer.src = src;
-    audioPlayer.play().catch(() => {
-        /* אם דפדפן חוסם – אין קריסה */
-    });
+    audioPlayer.play().catch(() => {});
+}
+
+function playBackground(src) {
+    if (currentBg === src) return;
+    currentBg = src;
+
+    bgPlayer.pause();
+    bgPlayer.currentTime = 0;
+    bgPlayer.src = src;
+    bgPlayer.play().catch(() => {});
 }
 
 function playNextSound() {
-    playFile(`${currentSound}.mp3`);
+    const soundNum = currentSound;
+
+    /* play main sound */
+    playFile(`${soundNum}.mp3`);
+
+    /* check background switch */
+    if (BG_MAP[soundNum]) {
+        playBackground(BG_MAP[soundNum]);
+    }
+
     currentSound++;
     if (currentSound > TOTAL_SOUNDS) currentSound = 1;
 }
@@ -118,15 +150,18 @@ function startGame() {
     if (gameStarted) return;
     gameStarted = true;
 
-    // First user gesture → unlock audio
+    /* unlock audio */
     playFile("intro.mp3");
+
+    /* start first background */
+    playBackground("mus1.mp3");
 
     splash.style.display = "none";
     target.style.display = "block";
     randomPosition();
 }
 
-/* Pointer events = עובד גם במחשב וגם בטלפון */
+/* Events */
 splash.addEventListener("pointerdown", e => {
     e.preventDefault();
     startGame();
@@ -142,11 +177,10 @@ window.addEventListener("resize", () => {
     if (gameStarted) randomPosition();
 });
 
-/* ================= Service Worker ================= */
+/* Service Worker */
 if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js");
 }
 </script>
 </body>
 </html>
-
