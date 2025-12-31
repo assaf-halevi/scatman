@@ -74,7 +74,7 @@ const TOTAL_SOUNDS = 48;
 let currentSound = 1;
 let gameStarted = false;
 
-/* Sound players */
+/* Audio players */
 const audioPlayer = new Audio(); // short sounds
 audioPlayer.preload = "auto";
 
@@ -84,7 +84,7 @@ bgPlayer.preload = "auto";
 
 let currentBg = null;
 
-/* Background music switch map */
+/* Background switch map */
 const BG_MAP = {
     1:  "mus1.mp3",
     7:  "mus2-1.mp3",
@@ -106,6 +106,7 @@ const target = document.getElementById("target");
 function randomPosition() {
     const w = window.innerWidth;
     const h = window.innerHeight;
+
     const tw = target.offsetWidth || 140;
     const th = target.offsetHeight || 140;
 
@@ -122,8 +123,8 @@ function playFile(src) {
 
 function playBackground(src) {
     if (currentBg === src) return;
-    currentBg = src;
 
+    currentBg = src;
     bgPlayer.pause();
     bgPlayer.currentTime = 0;
     bgPlayer.src = src;
@@ -133,10 +134,10 @@ function playBackground(src) {
 function playNextSound() {
     const soundNum = currentSound;
 
-    /* play main sound */
+    /* play numbered sound */
     playFile(`${soundNum}.mp3`);
 
-    /* check background switch */
+    /* background starts / switches only here */
     if (BG_MAP[soundNum]) {
         playBackground(BG_MAP[soundNum]);
     }
@@ -150,11 +151,8 @@ function startGame() {
     if (gameStarted) return;
     gameStarted = true;
 
-    /* unlock audio */
+    /* intro only */
     playFile("intro.mp3");
-
-    /* start first background */
-    playBackground("mus1.mp3");
 
     splash.style.display = "none";
     target.style.display = "block";
