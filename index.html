@@ -6,7 +6,6 @@
       content="width=device-width, height=device-height, initial-scale=1.0, user-scalable=no" />
 <title>Tap & Jump</title>
 
-<!-- PWA -->
 <link rel="manifest" href="manifest.json">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#ffffff">
@@ -22,32 +21,23 @@ html, body {
     touch-action: none;
 }
 
-#app {
-    position: fixed;
-    inset: 0;
-    background: #ffffff;
-}
+#app { position: fixed; inset: 0; background: #ffffff; }
 
-/* Splash screen */
 #splash {
     position: absolute;
     inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #ffffff;
     z-index: 10;
 }
 
 #splash img {
     width: min(92vw, 92vh);
-    max-height: 92vh;
-    object-fit: contain;
     user-select: none;
     -webkit-user-drag: none;
 }
 
-/* Game target */
 #target {
     position: absolute;
     width: 140px;
@@ -62,10 +52,9 @@ html, body {
 <body>
 <div id="app">
     <div id="splash">
-        <img id="splashImg" src="image.png" alt="Start">
+        <img src="image.png" alt="Start">
     </div>
-
-    <img id="target" src="image.png" alt="Target" draggable="false">
+    <img id="target" src="image.png" draggable="false">
 </div>
 
 <script>
@@ -74,17 +63,19 @@ const TOTAL_SOUNDS = 48;
 let currentSound = 1;
 let gameStarted = false;
 
-/* Audio players */
-const audioPlayer = new Audio(); // short sounds
-audioPlayer.preload = "auto";
+/* short sounds */
+const audioPlayer = new Audio();
 
-const bgPlayer = new Audio();    // background music
-bgPlayer.loop = true;
-bgPlayer.preload = "auto";
+/* background double buffer */
+const bgA = new Audio();
+const bgB = new Audio();
+bgA.loop = bgB.loop = true;
 
-let currentBg = null;
+let activeBG = bgA;
+let standbyBG = bgB;
+let currentBgSrc = null;
 
-/* Background switch map */
+/* background map */
 const BG_MAP = {
     1:  "mus1.mp3",
     7:  "mus2-1.mp3",
@@ -104,9 +95,7 @@ const target = document.getElementById("target");
 
 /* ================= Helpers ================= */
 function randomPosition() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-
+    const w = innerWidth, h = innerHeight;
     const tw = target.offsetWidth || 140;
     const th = target.offsetHeight || 140;
 
@@ -121,37 +110,49 @@ function playFile(src) {
     audioPlayer.play().catch(() => {});
 }
 
-function playBackground(src) {
-    if (currentBg === src) return;
+function swapBackground(src) {
+    if (currentBgSrc === src) return;
+    currentBgSrc = src;
 
-    currentBg = src;
-    bgPlayer.pause();
-    bgPlayer.currentTime = 0;
-    bgPlayer.src = src;
-    bgPlayer.play().catch(() => {});
+    standbyBG.src = src;
+    standbyBG.currentTime = 0;
+
+    /* preload silently */
+    standbyBG.play().then(() => {
+        standbyBG.pause();
+        standbyBG.currentTime = 0;
+
+        /* instant swap */
+        activeBG.pause();
+        activeBG.currentTime = 0;
+
+        standbyBG.play();
+
+        /* swap refs */
+        const tmp = activeBG;
+        activeBG = standbyBG;
+        standbyBG = tmp;
+    }).catch(() => {});
 }
 
 function playNextSound() {
-    const soundNum = currentSound;
+    const n = currentSound;
 
-    /* play numbered sound */
-    playFile(`${soundNum}.mp3`);
+    playFile(`${n}.mp3`);
 
-    /* background starts / switches only here */
-    if (BG_MAP[soundNum]) {
-        playBackground(BG_MAP[soundNum]);
+    if (BG_MAP[n]) {
+        swapBackground(BG_MAP[n]);
     }
 
     currentSound++;
     if (currentSound > TOTAL_SOUNDS) currentSound = 1;
 }
 
-/* ================= Start flow ================= */
+/* ================= Start ================= */
 function startGame() {
     if (gameStarted) return;
     gameStarted = true;
 
-    /* intro only */
     playFile("intro.mp3");
 
     splash.style.display = "none";
@@ -175,7 +176,7 @@ window.addEventListener("resize", () => {
     if (gameStarted) randomPosition();
 });
 
-/* Service Worker */
+/* SW */
 if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js");
 }
